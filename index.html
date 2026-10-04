@@ -70,6 +70,13 @@
   .start:focus-visible{outline:3px solid #0f5f6a;outline-offset:4px}
   .prices{margin:0;font:400 .95rem var(--f-type);color:#4f6568;text-align:center;opacity:0;transition:opacity .8s .2s}
   #intro.ready .prices{opacity:1}
+  .soundhint{
+    position:absolute;left:0;right:0;margin:0 auto;width:max-content;max-width:92vw;bottom:14px;z-index:3;cursor:pointer;
+    font:700 .85rem/1 var(--f-logo);color:#0f5f6a;background:rgba(255,255,255,.85);border:2px solid rgba(15,95,106,.5);
+    border-radius:999px;padding:10px 16px;box-shadow:0 3px 10px rgba(0,0,0,.15);animation:hintpulse 2.4s ease-in-out infinite;
+  }
+  .soundhint[hidden]{display:none}
+  @keyframes hintpulse{0%,100%{opacity:.75}50%{opacity:1}}
 
   /* =====================================================
      MESIN FOTO BOX
@@ -326,6 +333,7 @@
     <button class="start" id="startBtn" type="button">Sentuh untuk mulai</button>
     <p class="prices" id="prices"></p>
   </div>
+  <button class="soundhint" id="soundHint" type="button" hidden>🔊 Ketuk untuk menyalakan suara</button>
 </div>
 
 <!-- ================= MESIN ================= -->
@@ -948,14 +956,31 @@ const GUIDES = [{"name":"wave","color":"teal","d":"M3.1 502.3 C4.8 501.3 9.7 498
     pluck(INTRO_END + .15, 1479.98, 2.0, .035);
   }
 
-  // Buka kunci suara: browser baru boleh bersuara setelah layar disentuh sekali.
-  // Sentuhan pertama di luar tombol langsung memutar animasi + musik sebagai tanda suara sudah aktif.
+  // Browser (Chrome, Safari, dll) memblokir suara sampai layar disentuh sekali.
+  // Selama suara masih terkunci, muncul tombol kecil "Ketuk untuk menyalakan suara".
+  const soundHint = $('soundHint');
+  function updateSoundHint() {
+    const locked = CONFIG.introMusic && state.sound && !(ac && ac.state === 'running');
+    soundHint.hidden = !(locked && !intro.hidden);
+  }
+  function unlockSound(thenReplay) {
+    const a = audio();
+    Promise.resolve(a && a.resume ? a.resume() : null).catch(() => {}).then(() => {
+      updateSoundHint();
+      if (thenReplay && !intro.hidden && intro.classList.contains('ready')) replayIntro();
+    });
+  }
+  soundHint.addEventListener('click', e => { e.stopPropagation(); unlockSound(true); });
+  setInterval(updateSoundHint, 1000);
+  updateSoundHint();
+
+  // Sentuhan pertama di mana saja ikut membuka kunci suara
   ['pointerup', 'touchend', 'click', 'keydown'].forEach(ev => document.addEventListener(ev, e => {
     const was = ac && ac.state === 'running';
-    audio();
-    if (!was && !intro.hidden && intro.classList.contains('ready') && !(e.target.closest && e.target.closest('#startBtn'))) {
-      setTimeout(replayIntro, 80);
-    }
+    if (was) return;
+    const t = e.target && e.target.closest ? e.target : null;
+    if (t && t.closest('#soundHint')) return;
+    unlockSound(!(t && t.closest('#startBtn')));
   }, { passive: true }));
 
   let rsT = 0;
